@@ -1,0 +1,44 @@
+Metadata-Version: 2.1
+Name: pyPCIe
+Version: 0.1.1
+Summary: Simple Python module to access PCIe devices
+Home-page: https://github.com/heikoengel/pyPCIe
+Author: Heiko Engel
+Author-email: <heikoengel@users.noreply.github.com>
+License: UNKNOWN
+Description: # pyPCIe: Simple Python Module to access PCIe Endpoint BARs
+        
+        pyPCIe provides a quick way to read/write registers in PCIe Base
+        Address Register (BAR) regions.
+        
+        pyPCIe `mmap`s PCIe device BARs via the `resourceX` files in
+        `/sys/bus/pci/devices/[bus_id]` for read/write and provides functions
+        for 32 bit read/write requests.
+        
+        *Note: the `resourceX` files in sysfs are typically only accessible as
+        root. The python scripts using pyPCIe might need to be run as root.*
+        
+        ## Example
+        
+        ```python
+        from pypcie import Device
+        
+        # Bind to PCI device at "0000:03:00.0"
+        d = Device("0000:03:00.0")
+        # Access BAR 0
+        bar = d.bar[0]
+        
+        # write 0xdeadbeef to BAR 0, offset 0x1000
+        bar.write(0x1000, 0xdeadbeef)
+        
+        # read BAR 0, offset 0x1004
+        ret = bar.read(0x1004)
+        ```
+        
+Keywords: python,pcie
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: POSIX :: Linux
+Description-Content-Type: text/markdown
