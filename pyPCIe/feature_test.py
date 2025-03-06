@@ -29,6 +29,10 @@ latest_B_samples = np.zeros(CHANNEL_SAMPLES, dtype=np.int16)
 # Lock for thread-safe updates
 data_lock = threading.Lock()
 
+# Default range
+selected_start = 0
+selected_end = CHANNEL_SAMPLES
+
 # Initialize PCIe
 def pcie_init():
     os.system("setpci -s 01:00.0 COMMAND=0x2")
@@ -89,7 +93,7 @@ def data_acquisition():
     while running:
         generate_samples()
         update(1)
-        time.sleep(0.1)  # Small delay to avoid excessive CPU usage
+        time.sleep(0.1)
 
 # Start Continuous Data Acquisition
 def start_server():
@@ -158,71 +162,123 @@ def update(_):
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
         return line_A, line_B
-
-# Function to Update Plot Manually (For Single Trigger)
+    
+# Function to Update Plot
 def update_plot():
+    global selected_start, selected_end
+    
+    # Ensure range values are integers
+    selected_start, selected_end = int(selected_start), int(selected_end)
+
     with data_lock:
-        line_A.set_data(np.arange(CHANNEL_SAMPLES), latest_A_samples)
-        line_B.set_data(np.arange(CHANNEL_SAMPLES), latest_B_samples)
+        x_values = np.arange(selected_start, selected_end)
+        line_A.set_data(x_values, latest_A_samples[selected_start:selected_end])
+        line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
+
+    ax.set_xlim(selected_start, selected_end)
     canvas.draw_idle()
 
-# Custom Range for Data Plot
+# Set User-Defined X-axis Range
 def set_x_range():
+    global selected_start, selected_end
     try:
         start_sample = int(start_sample_entry.get())
         end_sample = int(end_sample_entry.get())
+
         if start_sample < 0 or end_sample > CHANNEL_SAMPLES or start_sample >= end_sample:
             print("Invalid range.")
             return
-        ax.set_xlim(start_sample, end_sample)
+
+        selected_start = start_sample
+        selected_end = end_sample
         update_plot()
     except ValueError:
         print("Please enter valid numbers.")
 
+# Shift X-axis Range within User-Defined Range
+def shift_x_range(direction):
+    global selected_start, selected_end
+    try:
+        shift_value = int(shift_amount_entry.get())  # Get user shift value
+
+        # Apply shift based on direction
+        if direction == "left":
+            new_start = max(0, selected_start - shift_value)
+            new_end = new_start + (selected_end - selected_start)
+        elif direction == "right":
+            new_end = min(CHANNEL_SAMPLES, selected_end + shift_value)
+            new_start = new_end - (selected_end - selected_start)
+
+        if new_start < 0 or new_end > CHANNEL_SAMPLES:
+            print("Shift out of range.")
+            return
+
+        selected_start, selected_end = new_start, new_end
+        update_plot()
+    except ValueError:
+        print("Please enter a valid shift amount.")
+
 # Function to reset the graph to original size
 def reset_zoom():
-    ax.set_xlim(original_xlim)
-    ax.set_ylim(original_ylim)
+    global selected_start, selected_end
+
+    # Ensure the range is integers
+    selected_start, selected_end = int(original_xlim[0]), int(original_xlim[1])  
+
+    ax.set_xlim(original_xlim)  
+    ax.set_ylim(original_ylim)  
+
     update_plot()  # Redraw the plot
+
+def on_closing():
+    global running
+    running = False  # Stop data acquisition
+    root.quit()  # Exit main loop
+    root.destroy()  # Destroy the window
 
 # GUI Setup
 root = tk.Tk()
 root.title("PCIe Data Server GUI")
 
-# Buttons
-tk.Button(root, text="Continuous", command=start_server).pack()
-tk.Button(root, text="Trigger Once", command=trigger_once).pack()
-tk.Button(root, text="Stop", command=stop_server).pack()
+button_frame = tk.Frame(root)
+button_frame.pack(pady=5)
 
-# Range Input for Custom Zoom
-tk.Label(root, text="Start Sample:").pack()
-start_sample_entry = tk.Entry(root)
-start_sample_entry.pack()
+tk.Button(button_frame, text="Continuous", command=start_server).grid(row=0, column=0, padx=5, pady=5)
+tk.Button(button_frame, text="Trigger Once", command=trigger_once).grid(row=0, column=1, padx=5, pady=5)
+tk.Button(button_frame, text="Stop", command=stop_server).grid(row=0, column=2, padx=5, pady=5)
 
-tk.Label(root, text="End Sample:").pack()
-end_sample_entry = tk.Entry(root)
-end_sample_entry.pack()
+range_frame = tk.Frame(root)
+range_frame.pack(pady=5)
 
-tk.Button(root, text="Set Range", command=set_x_range).pack()
+tk.Label(range_frame, text="Start:").grid(row=0, column=0)
+start_sample_entry = tk.Entry(range_frame, width=10)
+start_sample_entry.grid(row=0, column=1)
 
-# Add "Original Size" button
-tk.Button(root, text="Original Size", command=reset_zoom).pack()
+tk.Label(range_frame, text="End:").grid(row=0, column=2)
+end_sample_entry = tk.Entry(range_frame, width=10)
+end_sample_entry.grid(row=0, column=3)
 
-# Embed Matplotlib Figure in Tkinter
+# Frame for Range Adjustment
+range_button_frame = tk.Frame(root)
+range_button_frame.pack(pady=5)
+
+tk.Button(range_button_frame, text="Set Range", command=set_x_range).grid(row=0, column=0, padx=5, pady=5)
+tk.Button(range_button_frame, text="Original Size", command=reset_zoom).grid(row=0, column=1, padx=5, pady=5)
+
+shift_frame = tk.Frame(root)
+shift_frame.pack(pady=5)
+
+tk.Label(shift_frame, text="Shift by:").grid(row=0, column=0)
+shift_amount_entry = tk.Entry(shift_frame, width=10)
+shift_amount_entry.grid(row=0, column=1)
+shift_amount_entry.insert(0, "100")
+
+tk.Button(shift_frame, text="-", command=lambda: shift_x_range("left")).grid(row=0, column=2)
+tk.Button(shift_frame, text="+", command=lambda: shift_x_range("right")).grid(row=0, column=3)
+
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
 
-# Function to handle window closing event
-def on_close():
-    global running
-    print("[Exit] Stopping data acquisition and closing GUI.")
-    running = False  # Ensure the acquisition thread stops
-    root.quit()  # Stop the Tkinter main loop
-    root.destroy()  # Destroy the window and exit cleanly
-    os._exit(0)  # Ensure all threads terminate
+root.protocol("WM_DELETE_WINDOW", on_closing)
 
-# Bind the window close event
-root.protocol("WM_DELETE_WINDOW", on_close)
-
-# Run Tkinter GUI in the main thread
 root.mainloop()
