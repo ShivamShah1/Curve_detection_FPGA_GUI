@@ -32,6 +32,7 @@ data_lock = threading.Lock()
 # Default range
 selected_start = 0
 selected_end = CHANNEL_SAMPLES
+selected_ylim = [1800, 5000]  # Initial Y range
 
 # Initialize PCIe
 def pcie_init():
@@ -162,10 +163,10 @@ def update(_):
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
         return line_A, line_B
-    
+
 # Function to Update Plot
 def update_plot():
-    global selected_start, selected_end
+    global selected_start, selected_end, selected_ylim
     
     # Ensure range values are integers
     selected_start, selected_end = int(selected_start), int(selected_end)
@@ -176,6 +177,7 @@ def update_plot():
         line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
 
     ax.set_xlim(selected_start, selected_end)
+    ax.set_ylim(selected_ylim)  # Set Y-axis range
     canvas.draw_idle()
 
 # Set User-Defined X-axis Range
@@ -230,6 +232,55 @@ def reset_zoom():
 
     update_plot()  # Redraw the plot
 
+# Shift Y-axis Range within User-Defined Range
+def shift_y_range(direction):
+    global selected_ylim, original_ylim
+
+    try:
+        shift_value = int(shift_y_amount_entry.get())  # Get user shift value
+
+        # Apply shift based on direction
+        if direction == "up":
+            new_ylim = (selected_ylim[0] + shift_value, selected_ylim[1] + shift_value)
+        elif direction == "down":
+            new_ylim = (selected_ylim[0] - shift_value, selected_ylim[1] - shift_value)
+
+        # Ensure the Y range doesn't exceed original limits
+        if new_ylim[0] < original_ylim[0]:
+            print("Y range cannot go lower than the original minimum.")
+            return
+        if new_ylim[1] > original_ylim[1]:
+            print("Y range cannot go higher than the original maximum.")
+            return
+
+        # Ensure new range is valid (Y-axis min should be less than max)
+        if new_ylim[0] >= new_ylim[1]:
+            print("Invalid Y range.")
+            return
+
+        selected_ylim = new_ylim
+        update_plot()
+
+    except ValueError:
+        print("Please enter a valid shift amount.")
+
+# Function to set Y-axis range
+def set_y_range():
+    global selected_ylim
+    try:
+        start_y = int(start_y_entry.get())
+        end_y = int(end_y_entry.get())
+
+        if start_y >= end_y:
+            print("Invalid Y-axis range.")
+            return
+
+        selected_ylim = [start_y, end_y]
+        update_plot()
+
+    except ValueError:
+        print("Please enter valid numbers for Y range.")
+
 def on_closing():
     global running
     running = False  # Stop data acquisition
@@ -250,20 +301,33 @@ tk.Button(button_frame, text="Stop", command=stop_server).grid(row=0, column=2, 
 range_frame = tk.Frame(root)
 range_frame.pack(pady=5)
 
-tk.Label(range_frame, text="Start:").grid(row=0, column=0)
+tk.Label(range_frame, text="X Start:").grid(row=0, column=0)
 start_sample_entry = tk.Entry(range_frame, width=10)
 start_sample_entry.grid(row=0, column=1)
 
-tk.Label(range_frame, text="End:").grid(row=0, column=2)
+tk.Label(range_frame, text="X End:").grid(row=0, column=2)
 end_sample_entry = tk.Entry(range_frame, width=10)
 end_sample_entry.grid(row=0, column=3)
+
+# Y-axis Range Inputs
+range_frame_y = tk.Frame(root)
+range_frame_y.pack(pady=5)
+
+tk.Label(range_frame_y, text="Y Start:").grid(row=0, column=0)
+start_y_entry = tk.Entry(range_frame_y, width=10)
+start_y_entry.grid(row=0, column=1)
+
+tk.Label(range_frame_y, text="Y End:").grid(row=0, column=2)
+end_y_entry = tk.Entry(range_frame_y, width=10)
+end_y_entry.grid(row=0, column=3)
 
 # Frame for Range Adjustment
 range_button_frame = tk.Frame(root)
 range_button_frame.pack(pady=5)
 
-tk.Button(range_button_frame, text="Set Range", command=set_x_range).grid(row=0, column=0, padx=5, pady=5)
+tk.Button(range_button_frame, text="Set X Range", command=set_x_range).grid(row=0, column=0, padx=5, pady=5)
 tk.Button(range_button_frame, text="Original Size", command=reset_zoom).grid(row=0, column=1, padx=5, pady=5)
+tk.Button(range_button_frame, text="Set Y Range", command=set_y_range).grid(row=0, column=2, padx=5, pady=5)
 
 shift_frame = tk.Frame(root)
 shift_frame.pack(pady=5)
@@ -273,11 +337,24 @@ shift_amount_entry = tk.Entry(shift_frame, width=10)
 shift_amount_entry.grid(row=0, column=1)
 shift_amount_entry.insert(0, "100")
 
-tk.Button(shift_frame, text="-", command=lambda: shift_x_range("left")).grid(row=0, column=2)
-tk.Button(shift_frame, text="+", command=lambda: shift_x_range("right")).grid(row=0, column=3)
+tk.Button(shift_frame, text="Left", command=lambda: shift_x_range("left")).grid(row=0, column=2)
+tk.Button(shift_frame, text="Right", command=lambda: shift_x_range("right")).grid(row=0, column=3)
 
+# Y-axis shift controls
+shift_y_frame = tk.Frame(root)
+shift_y_frame.pack(pady=5)
+
+tk.Label(shift_y_frame, text="Shift Y by:").grid(row=0, column=0)
+shift_y_amount_entry = tk.Entry(shift_y_frame, width=10)
+shift_y_amount_entry.grid(row=0, column=1)
+shift_y_amount_entry.insert(0, "100")
+
+tk.Button(shift_y_frame, text="Up", command=lambda: shift_y_range("up")).grid(row=0, column=2)
+tk.Button(shift_y_frame, text="Down", command=lambda: shift_y_range("down")).grid(row=0, column=3)
+
+# Matplotlib Canvas
 canvas = FigureCanvasTkAgg(fig, master=root)
-canvas.get_tk_widget().pack()
+canvas.get_tk_widget().pack(pady=5)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
