@@ -139,6 +139,12 @@ def trigger_once():
     generate_samples()
     update_plot()
 
+# Spike Counting Logic
+def count_spikes(samples, threshold=2500):
+    """Count how many samples exceed the threshold value (indicating a spike)."""
+    spike_count = np.sum(np.abs(samples) > threshold)
+    return spike_count
+
 # Matplotlib Plot Setup
 fig, ax = plt.subplots(figsize=(6, 4))
 ax.set_xlim(0, CHANNEL_SAMPLES)
@@ -162,6 +168,12 @@ def update(_):
             line_A.set_data(x_values, latest_A_samples)
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
+        
+        # Count spikes and display them on the GUI
+        spike_count_A = count_spikes(latest_A_samples)
+        spike_count_B = count_spikes(latest_B_samples)
+        spike_count_label.config(text=f"Spikes (A): {spike_count_A}   Spikes (B): {spike_count_B}")
+
         return line_A, line_B
 
 # Function to Update Plot
@@ -221,16 +233,19 @@ def shift_x_range(direction):
         print("Please enter a valid shift amount.")
 
 # Function to reset the graph to original size
+# Function to reset the graph to original size
 def reset_zoom():
-    global selected_start, selected_end
+    global selected_start, selected_end, selected_ylim
 
     # Ensure the range is integers
-    selected_start, selected_end = int(original_xlim[0]), int(original_xlim[1])  
+    selected_start, selected_end = int(original_xlim[0]), int(original_xlim[1])
+    selected_ylim = list(original_ylim)  # Reset Y-axis range to the original values
 
-    ax.set_xlim(original_xlim)  
-    ax.set_ylim(original_ylim)  
+    ax.set_xlim(original_xlim)  # Reset X-axis
+    ax.set_ylim(original_ylim)  # Reset Y-axis
 
-    update_plot()  # Redraw the plot
+    update_plot()  # Redraw the plot with updated ranges
+
 
 # Shift Y-axis Range within User-Defined Range
 def shift_y_range(direction):
@@ -352,10 +367,15 @@ shift_y_amount_entry.insert(0, "100")
 tk.Button(shift_y_frame, text="Up", command=lambda: shift_y_range("up")).grid(row=0, column=2)
 tk.Button(shift_y_frame, text="Down", command=lambda: shift_y_range("down")).grid(row=0, column=3)
 
+# Spike Count Display
+spike_count_label = tk.Label(root, text="Spikes (A): 0   Spikes (B): 0", font=("Helvetica", 12))
+spike_count_label.pack(pady=10)
+
 # Matplotlib Canvas
 canvas = FigureCanvasTkAgg(fig, master=root)
-canvas.get_tk_widget().pack(pady=5)
+canvas.get_tk_widget().pack(padx=5, pady=5)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
+# Start the GUI loop
 root.mainloop()
