@@ -140,10 +140,25 @@ def trigger_once():
     update_plot()
 
 # Spike Counting Logic
-def count_spikes(samples, threshold=2500):
-    """Count how many samples exceed the threshold value (indicating a spike)."""
-    spike_count = np.sum(np.abs(samples) > threshold)
+def count_spikes(samples, threshold=2500, skip=40):
+    """Count spikes where a value exceeds the threshold, and then skip next `skip` samples."""
+    spike_count = 0
+    skip_count = 0  # This will track how many samples we need to skip
+
+    for sample in samples:
+        if skip_count > 0:
+            # If we are in the skip phase, just decrement the counter
+            skip_count -= 1
+            continue
+
+        if abs(sample) > threshold:
+            # Count this sample as a spike
+            spike_count += 1
+            # Skip the next `skip` samples
+            skip_count = skip
+
     return spike_count
+
 
 # Matplotlib Plot Setup
 fig, ax = plt.subplots(figsize=(6, 4))
