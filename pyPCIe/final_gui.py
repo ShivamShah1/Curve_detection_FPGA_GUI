@@ -141,11 +141,15 @@ def trigger_once():
 
 # Spike Counting Logic
 def count_spikes(samples, threshold=2500, skip=40):
-    """Count spikes where a value exceeds the threshold, and then skip next `skip` samples."""
+    """Count spikes where a value exceeds the threshold, and then skip next `skip` samples.
+    Also calculate the distance from the x-axis (i.e., the sample index) where spikes occur."""
+    
     spike_count = 0
     skip_count = 0  # This will track how many samples we need to skip
+    spike_positions = []  # To store positions of spikes (x-axis indices)
+    #spike_distances = []  # To store the distances from x-axis (sample values exceeding the threshold)
 
-    for sample in samples:
+    for i, sample in enumerate(samples):
         if skip_count > 0:
             # If we are in the skip phase, just decrement the counter
             skip_count -= 1
@@ -154,11 +158,15 @@ def count_spikes(samples, threshold=2500, skip=40):
         if abs(sample) > threshold:
             # Count this sample as a spike
             spike_count += 1
+            
+            # Calculate the distance from the x-axis (y-axis value)
+            spike_positions.append(i+1)  # X-axis position is the index of the spike
+            #spike_distances.append(abs(sample))  # Y-axis distance is the spike value itself
+            
             # Skip the next `skip` samples
             skip_count = skip
 
-    return spike_count
-
+    return spike_count, spike_positions
 
 # Matplotlib Plot Setup
 fig, ax = plt.subplots(figsize=(6, 4))
@@ -202,6 +210,11 @@ def update_plot():
         x_values = np.arange(selected_start, selected_end)
         line_A.set_data(x_values, latest_A_samples[selected_start:selected_end])
         line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
+
+    # Count spikes and display them on the GUI
+    spike_count_A = count_spikes(latest_A_samples)
+    spike_count_B = count_spikes(latest_B_samples)
+    spike_count_label.config(text=f"Spikes (A): {spike_count_A}   Spikes (B): {spike_count_B}")
 
     ax.set_xlim(selected_start, selected_end)
     ax.set_ylim(selected_ylim)  # Set Y-axis range
