@@ -12,6 +12,7 @@ from pypcie import Device
 # Constants
 TRIGGER_REG = 0x0
 BUSY_REG = 0x8
+DACVALUE_REG = 0x10
 BLOCK_SIZE = 4 * 1024
 
 # Buffer size (16384 per channel, total 32768)
@@ -47,6 +48,7 @@ def pcie_init():
 # Trigger Function
 def trigger(bar):
     print("Triggering FPGA...")
+    bar.write(DACVALUE_REG, 0x14)
     bar.write(TRIGGER_REG, 0x1)
     bar.write(TRIGGER_REG, 0x0)
     print(f"Trigger Completed. Status: {bar.read(TRIGGER_REG)}")
@@ -139,34 +141,55 @@ def trigger_once():
     generate_samples()
     update_plot()
 
-# Spike Counting Logic
 def count_spikes(samples, threshold=2500, skip=40):
-    """Count spikes where a value exceeds the threshold, and then skip next `skip` samples.
-    Also calculate the distance from the x-axis (i.e., the sample index) where spikes occur."""
-    
     spike_count = 0
-    skip_count = 0  # This will track how many samples we need to skip
-    spike_positions = []  # To store positions of spikes (x-axis indices)
-    #spike_distances = []  # To store the distances from x-axis (sample values exceeding the threshold)
+    skip_count = 0
+    spike_positions = []
+    spike_heights = []
+    spike_colors = []
+    max_sample = None
+    max_sample_index = None
 
     for i, sample in enumerate(samples):
         if skip_count > 0:
-            # If we are in the skip phase, just decrement the counter
             skip_count -= 1
             continue
 
         if abs(sample) > threshold:
-            # Count this sample as a spike
-            spike_count += 1
-            
-            # Calculate the distance from the x-axis (y-axis value)
-            spike_positions.append(i+1)  # X-axis position is the index of the spike
-            #spike_distances.append(abs(sample))  # Y-axis distance is the spike value itself
-            
-            # Skip the next `skip` samples
-            skip_count = skip
+            if max_sample is None or abs(sample) > abs(max_sample):
+                max_sample = sample
+                max_sample_index = i
+        else:
+            if max_sample is not None:
+                # Register the highest point (max_sample)
+                spike_count += 1
+                spike_positions.append(max_sample_index)
+                spike_heights.append(max_sample)
+                
+                # Determine the color based on max_sample value
+                if abs(max_sample) < 2100:
+                    spike_colors.append('blue')  # Low range
+                elif 2100 <= abs(max_sample) < 2300:
+                    spike_colors.append('lightblue')  # Soft blue
+                elif 2500 <= abs(max_sample) < 3000:
+                    spike_colors.append('cyan')  # Light cyan for middle-low values
+                elif 3000 <= abs(max_sample) < 3400:
+                    spike_colors.append('lightyellow')  # Soft yellow
+                elif 3400 <= abs(max_sample) < 3600:
+                    spike_colors.append('yellow')  # Mid-range values
+                elif 3600 <= abs(max_sample) < 3800:
+                    spike_colors.append('orange')  # Higher mid-range values
+                elif 3800 <= abs(max_sample) < 4000:
+                    spike_colors.append('darkorange')  # Near-high range values
+                else:
+                    spike_colors.append('red')  # High range
 
-    return spike_count, spike_positions
+                # Reset tracking for the next spike
+                max_sample = None
+                max_sample_index = None
+                skip_count = skip
+
+    return spike_count, spike_positions, spike_heights, spike_colors
 
 # Matplotlib Plot Setup
 fig, ax = plt.subplots(figsize=(6, 4))
@@ -184,7 +207,7 @@ original_xlim = ax.get_xlim()
 original_ylim = ax.get_ylim()
 
 # Fix: Proper Continuous Update for FuncAnimation
-def update(_):
+def update(_, skip=40):
     if continuous_mode:
         with data_lock:
             x_values = np.arange(CHANNEL_SAMPLES)
@@ -192,15 +215,57 @@ def update(_):
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
         
-        # Count spikes and display them on the GUI
-        spike_count_A = count_spikes(latest_A_samples)
-        spike_count_B = count_spikes(latest_B_samples)
-        spike_count_label.config(text=f"Spikes (A): {spike_count_A}   Spikes (B): {spike_count_B}")
+        # Count spikes and get their positions, heights, and colors for continuous data
+        spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A = count_spikes(latest_A_samples)
+        spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B = count_spikes(latest_B_samples)
 
+        # Format the spike information to display
+        spike_info_A = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
+                        for i, (pos, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A))]
+        spike_info_B = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
+                        for i, (pos, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B))]
+
+        # Combine spike info for both channels
+        spike_info_text = "\n".join(spike_info_A + spike_info_B)
+
+        # Printing the spike information
+        #print(f"Spikes (A): {spike_count_A} - Positions, Heights, Colors: {spike_info_A}")
+        #print(f"Spikes (B): {spike_count_B} - Positions, Heights, Colors: {spike_info_B}")
+
+        # Update the spike count label to include the spike information
+        spike_count_label.config(
+            text=f"Spikes (A): {spike_count_A}\n{spike_info_text}\nSpikes (B): {spike_count_B}"
+        )
+
+        # Clear and replot the data for both channels
+        ax.cla()  # Clear the axis
+        ax.set_xlim(0, CHANNEL_SAMPLES)
+        ax.set_ylim(1800, 5000)
+
+        # Plot the main signal lines for both channels
+        ax.plot(x_values, latest_A_samples, 'b-', label="Channel A")
+        ax.plot(x_values, latest_B_samples, 'g-', label="Channel B")
+
+        # Plot each spike with its correct color for Channel A
+        for i, (position, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A)):
+            spike_segment = latest_A_samples[position:position + skip]  # Adjusted for each spike
+            x_segment = x_values[position:position + skip]
+            ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike A {i+1}")
+
+        # Plot each spike with its correct color for Channel B
+        for i, (position, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B)):
+            spike_segment = latest_B_samples[position:position + skip]
+            x_segment = x_values[position:position + skip]
+            ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike B {i+1}")
+
+        #ax.legend()
+        
+        canvas.draw_idle()
+        
         return line_A, line_B
 
 # Function to Update Plot
-def update_plot():
+def update_plot(skip=40):
     global selected_start, selected_end, selected_ylim
     
     # Ensure range values are integers
@@ -211,13 +276,46 @@ def update_plot():
         line_A.set_data(x_values, latest_A_samples[selected_start:selected_end])
         line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
 
-    # Count spikes and display them on the GUI
-    spike_count_A = count_spikes(latest_A_samples)
-    spike_count_B = count_spikes(latest_B_samples)
-    spike_count_label.config(text=f"Spikes (A): {spike_count_A}   Spikes (B): {spike_count_B}")
+    # Count spikes and get their positions, heights, and colors
+    spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A = count_spikes(latest_A_samples[selected_start:selected_end])
+    spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B = count_spikes(latest_B_samples[selected_start:selected_end])
 
+    # Format the spike information to display
+    spike_info_A = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
+                    for i, (pos, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A))]
+    spike_info_B = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
+                    for i, (pos, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B))]
+
+    # Combine spike info for both channels
+    spike_info_text = "\n".join(spike_info_A + spike_info_B)
+
+    # Update the spike count label to include the spike information
+    spike_count_label.config(
+        text=f"Spikes (A): {spike_count_A}\n{spike_info_text}\nSpikes (B): {spike_count_B}"
+    )
+
+    # Clear and replot the data for the selected range
+    ax.cla()  # Clear the axis
     ax.set_xlim(selected_start, selected_end)
-    ax.set_ylim(selected_ylim)  # Set Y-axis range
+    ax.set_ylim(selected_ylim)
+
+    # Plot the main signal lines for both channels
+    ax.plot(x_values, latest_A_samples[selected_start:selected_end], 'b-', label="Channel A")
+    ax.plot(x_values, latest_B_samples[selected_start:selected_end], 'g-', label="Channel B")
+
+    # Plot each spike with its correct color for Channel A
+    for i, (position, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A)):
+        spike_segment = latest_A_samples[selected_start + position:selected_start + position + skip]  # Adjusted to the selected range
+        x_segment = x_values[selected_start + position:selected_start + position + skip]
+        ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike A {i+1}")
+
+    # Plot each spike with its correct color for Channel B
+    for i, (position, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B)):
+        spike_segment = latest_B_samples[selected_start + position:selected_start + position + skip]
+        x_segment = x_values[selected_start + position:selected_start + position + skip]
+        ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike B {i+1}")
+
+    # Draw the updated plot
     canvas.draw_idle()
 
 # Set User-Defined X-axis Range

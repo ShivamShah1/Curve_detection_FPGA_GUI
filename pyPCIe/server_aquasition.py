@@ -11,6 +11,7 @@ import os
 
 TRIGGER_REG = 0x0
 BUSY_REG    = 0x8
+DACVALUE_REG = 0x10
 
 def pcie_init():
     # Bind to PCI device at "0000:01:00.0"
@@ -35,6 +36,7 @@ def pcie_init():
 
 def trigger(bar):
     print("Trigger Initial.....")
+    bar.write(DACVALUE_REG, 0x14)
     bar.write(TRIGGER_REG, 0x1)
     bar.write(TRIGGER_REG, 0x0)
     #bar.write(TRIGGER_REG, 0x1)
@@ -124,7 +126,7 @@ def signal_handler(sig, frame):
 
 # Main server code
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('192.168.0.240', 12345))
+server.bind(('192.168.0.240', 22222))
 #server.bind(('192.168.0.46', 12345))
 #server.bind(('127.0.0.1', 12345))
 server.listen(5)
