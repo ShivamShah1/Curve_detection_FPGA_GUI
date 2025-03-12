@@ -59,23 +59,34 @@ dac_value_entry = tk.Entry(dac_frame, width=10)
 dac_value_entry.grid(row=0, column=1)
 dac_value_entry.insert(0, "20")  # Default value set to 20
 
+# Initialize a variable to track the last valid DAC value
+last_valid_dac_value = 20  # Default value
+
 def update_dac_value():
     """Fetches user input, converts decimal to integer, and returns its hex equivalent (as an integer)."""
+    global last_valid_dac_value  # Access the global variable for the last valid DAC value
+
     try:
         decimal_value = dac_value_entry.get().strip()  # Get user input and remove spaces
-        if not decimal_value:  # If empty, use default 20
-            decimal_value = 20
+
+        if not decimal_value:  # If empty, use the last valid or default value
+            decimal_value = last_valid_dac_value
         else:
             decimal_value = int(decimal_value)  # Convert input to integer
 
-        if 0 <= decimal_value <= 65535:  # Ensure it's in valid range
+        if decimal_value == 0:  # If the value is 0, revert to the last valid value
+            print("Error: 0 is not a valid input. Using last valid DAC value:", last_valid_dac_value)
+            return last_valid_dac_value
+        
+        if 0 < decimal_value <= 65535:  # Ensure it's in valid range
+            last_valid_dac_value = decimal_value  # Update the last valid DAC value
             return decimal_value  # Return as integer (hex conversion happens automatically)
         else:
-            print("Error: Value out of range (0-65535). Using default 20.")
-            return 20
+            print("Error: Value out of range (0-65535). Using last valid DAC value.")
+            return last_valid_dac_value
     except ValueError:
-        print("Error: Invalid input. Using default 20.")
-        return 20
+        print("Error: Invalid input. Using last valid DAC value.")
+        return last_valid_dac_value
 
 # Trigger Function
 def trigger(bar):
