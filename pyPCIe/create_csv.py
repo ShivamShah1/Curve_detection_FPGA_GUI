@@ -59,7 +59,7 @@ def generate_samples(bars, num_words):
 
     return channel_a, channel_b
 
-def save_to_csv(channel_a, channel_b, filename="pcie_samples.csv"):
+def save_to_csv(channel_a, channel_b, filename="pcie_samples1.csv"):
     """ Save Channel A and Channel B data into a CSV file. """
     with open(filename, mode="a", newline="") as file:  # Append mode
         writer = csv.writer(file)
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     num_samples = 16 * 1024  
 
     # Open CSV file and write headers only once
-    with open("pcie_samples.csv", mode="w", newline="") as file:
+    with open("pcie_samples1.csv", mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["Channel A", "Channel B"])
 

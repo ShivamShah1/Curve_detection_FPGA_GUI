@@ -2,21 +2,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import time
 
 # Load the CSV data
 filename = "pcie_samples.csv"
 df = pd.read_csv(filename)
 
-# Verify if the CSV is loaded correctly
-print(df.head())  # This should print the first few rows of the CSV to check the data
-
 # Extract Channel A and Channel B data
 channel_a = df["Channel A"].values
 channel_b = df["Channel B"].values
-
-# Check the length of the data
-print(f"Length of Channel A data: {len(channel_a)}")
-print(f"Length of Channel B data: {len(channel_b)}")
 
 # Number of samples per second (16KB of data per second)
 samples_per_second = 16 * 1024  # 16KB = 16 * 1024 samples
@@ -32,9 +26,6 @@ channel_b = channel_b[:expected_length]
 channel_a = channel_a.reshape(4, samples_per_second)
 channel_b = channel_b.reshape(4, samples_per_second)
 
-# Create time values for 4 seconds (0, 1, 2, 3)
-time_values = np.arange(4)
-
 # Function to normalize data and clip values outside the range [2000, 4100]
 def normalize_and_clip_data(data, min_val=2000, max_val=4100):
     # Clip values outside the range and normalize
@@ -46,20 +37,34 @@ def normalize_and_clip_data(data, min_val=2000, max_val=4100):
 channel_a_normalized = normalize_and_clip_data(channel_a)
 channel_b_normalized = normalize_and_clip_data(channel_b)
 
-# Plotting Heatmap for Channel A
-plt.figure(figsize=(12, 6))
-sns.heatmap(channel_a_normalized, cmap="coolwarm", cbar=True, xticklabels=np.arange(1, 5), yticklabels=np.arange(1, samples_per_second + 1))
-plt.title("Channel A - Heatmap of Samples Over Time")
-plt.xlabel("Time (seconds)")
-plt.ylabel("Sample Index (0 - 16KB)")
-plt.tight_layout()
-plt.show()
+# Create time values for 4 seconds (0, 1, 2, 3)
+time_values = np.arange(4)
 
-# Plotting Heatmap for Channel B
-plt.figure(figsize=(12, 6))
-sns.heatmap(channel_b_normalized, cmap="coolwarm", cbar=True, xticklabels=np.arange(1, 5), yticklabels=np.arange(1, samples_per_second + 1))
-plt.title("Channel B - Heatmap of Samples Over Time")
-plt.xlabel("Time (seconds)")
-plt.ylabel("Sample Index (0 - 16KB)")
-plt.tight_layout()
-plt.show()
+# Plotting Channel A and Channel B gradually
+
+for i in range(4):  # Loop over each second (4 time slices)
+    # Plotting Heatmap for Channel A
+    plt.figure(figsize=(12, 8))  # Increase figure size for clarity
+    sns.heatmap(channel_a_normalized[:i+1], cmap="coolwarm", cbar=True,
+                xticklabels=5, yticklabels=100, cbar_kws={'label': 'Normalized Value'})
+    plt.title(f"Channel A - Heatmap of Samples Over Time (First {i+1} Seconds)")
+    plt.xlabel("Sample Index (0 - 16KB)")
+    plt.ylabel("Time (Seconds)")
+    plt.tight_layout()
+    plt.show()  # Display plot
+
+    # Add delay of 0.5 seconds before showing the next heatmap
+    time.sleep(0.5)
+
+    # Plotting Heatmap for Channel B
+    plt.figure(figsize=(12, 8))  # Increase figure size for clarity
+    sns.heatmap(channel_b_normalized[:i+1], cmap="coolwarm", cbar=True,
+                xticklabels=5, yticklabels=100, cbar_kws={'label': 'Normalized Value'})
+    plt.title(f"Channel B - Heatmap of Samples Over Time (First {i+1} Seconds)")
+    plt.xlabel("Sample Index (0 - 16KB)")
+    plt.ylabel("Time (Seconds)")
+    plt.tight_layout()
+    plt.show()  # Display plot
+
+    # Add delay of 0.5 seconds before showing the next heatmap
+    time.sleep(0.5)

@@ -8,6 +8,7 @@ import os
 
 TRIGGER_REG = 0x0
 BUSY_REG = 0x8
+DACVALUE_REG = 0x10
 
 def pcie_init():
     os.system("setpci -s 01:00.0 COMMAND=0x2")
@@ -22,8 +23,16 @@ def pcie_init():
     bar1 = d.bar[1]
     return [bar1, bar0]
 
+change=0
 def trigger(bar):
+    global change
     print("Triggering FPGA...")
+    #print(change)
+    #if change<10:
+    bar.write(DACVALUE_REG, 0x14)
+    #else:
+        #bar.write(DACVALUE_REG, 0x64)
+    #change = change+1
     bar.write(TRIGGER_REG, 0x1)
     bar.write(TRIGGER_REG, 0x0)
     print(f"Trigger Completed. Status: {bar.read(TRIGGER_REG)}")
@@ -79,7 +88,7 @@ def handle_client(client_socket, bars):
 
 # Server setup
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('192.168.0.240', 12345))
+server.bind(('192.168.0.240', 22222))
 server.listen(5)
 print('[Server] Listening for connections...')
 

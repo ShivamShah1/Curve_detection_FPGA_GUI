@@ -45,10 +45,43 @@ def pcie_init():
     print("PCIE: Initialized")
     return [d.bar[1], d.bar[0]]
 
+root = tk.Tk()
+root.title("PCIe Data Server GUI")
+
+# DAC Value Frame
+dac_frame = tk.Frame(root)
+dac_frame.pack(pady=5)
+
+tk.Label(dac_frame, text="DAC Value (Decimal):").grid(row=0, column=0)
+
+# Entry field with default value 20
+dac_value_entry = tk.Entry(dac_frame, width=10)
+dac_value_entry.grid(row=0, column=1)
+dac_value_entry.insert(0, "20")  # Default value set to 20
+
+def update_dac_value():
+    """Fetches user input, converts decimal to integer, and returns its hex equivalent (as an integer)."""
+    try:
+        decimal_value = dac_value_entry.get().strip()  # Get user input and remove spaces
+        if not decimal_value:  # If empty, use default 20
+            decimal_value = 20
+        else:
+            decimal_value = int(decimal_value)  # Convert input to integer
+
+        if 0 <= decimal_value <= 65535:  # Ensure it's in valid range
+            return decimal_value  # Return as integer (hex conversion happens automatically)
+        else:
+            print("Error: Value out of range (0-65535). Using default 20.")
+            return 20
+    except ValueError:
+        print("Error: Invalid input. Using default 20.")
+        return 20
+
 # Trigger Function
 def trigger(bar):
     print("Triggering FPGA...")
-    bar.write(DACVALUE_REG, 0x14)
+    hex_val = update_dac_value()
+    bar.write(DACVALUE_REG, hex_val)
     bar.write(TRIGGER_REG, 0x1)
     bar.write(TRIGGER_REG, 0x0)
     print(f"Trigger Completed. Status: {bar.read(TRIGGER_REG)}")
@@ -141,32 +174,37 @@ def trigger_once():
     generate_samples()
     update_plot()
 
-def count_spikes(samples, threshold=2500, skip=40):
+def count_spikes(samples, threshold=2250, end_threshold=2065):
     spike_count = 0
-    skip_count = 0
+    in_spike = False  # Tracks whether we are inside a spike
     spike_positions = []
     spike_heights = []
     spike_colors = []
     max_sample = None
     max_sample_index = None
+    spike_start_index = None
+
+    # Lists to hold the max sample index for each spike
+    max_sample_indices = []
 
     for i, sample in enumerate(samples):
-        if skip_count > 0:
-            skip_count -= 1
-            continue
-
-        if abs(sample) > threshold:
-            if max_sample is None or abs(sample) > abs(max_sample):
+        if abs(sample) > threshold and not in_spike:  # Start of a new spike
+            in_spike = True
+            spike_start_index = i  # Record the start index of the spike
+            max_sample = sample
+            max_sample_index = i
+        elif in_spike:
+            if abs(sample) > abs(max_sample):  # Track the highest value within the spike
                 max_sample = sample
                 max_sample_index = i
-        else:
-            if max_sample is not None:
-                # Register the highest point (max_sample)
-                spike_count += 1
-                spike_positions.append(max_sample_index)
-                spike_heights.append(max_sample)
-                
-                # Determine the color based on max_sample value
+            
+            if abs(sample) <= end_threshold:  # End of spike when value returns to or below end_threshold
+                spike_count += 1  # Increment spike count
+                spike_positions.append(spike_start_index)  # Position of the spike
+                spike_heights.append(max_sample)  # Maximum height of the spike
+                max_sample_indices.append(max_sample_index)  # Append the peak index
+
+                # Assign color based on max_sample value
                 if abs(max_sample) < 2100:
                     spike_colors.append('blue')  # Low range
                 elif 2100 <= abs(max_sample) < 2300:
@@ -184,12 +222,13 @@ def count_spikes(samples, threshold=2500, skip=40):
                 else:
                     spike_colors.append('red')  # High range
 
-                # Reset tracking for the next spike
+                # Reset tracking variables after spike ends
+                in_spike = False
                 max_sample = None
                 max_sample_index = None
-                skip_count = skip
+                spike_start_index = None
 
-    return spike_count, spike_positions, spike_heights, spike_colors
+    return spike_count, spike_positions, spike_heights, spike_colors, max_sample_indices
 
 # Matplotlib Plot Setup
 fig, ax = plt.subplots(figsize=(6, 4))
@@ -215,26 +254,24 @@ def update(_, skip=40):
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
         
-        # Count spikes and get their positions, heights, and colors for continuous data
-        spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A = count_spikes(latest_A_samples)
-        spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B = count_spikes(latest_B_samples)
+        # Count spikes and get their positions, heights, colors, and max sample indices for continuous data
+        spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A, max_sample_indices_A = count_spikes(latest_A_samples)
+        #spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B, max_sample_indices_B = count_spikes(latest_B_samples)
 
-        # Format the spike information to display
-        spike_info_A = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
-                        for i, (pos, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A))]
-        spike_info_B = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
-                        for i, (pos, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B))]
+        # Format the spike data as a list of tuples (position, height) for both channels
+        spike_data_A = [(pos, height) for pos, height in zip(spike_positions_A, spike_heights_A)]
+        #spike_data_B = [(pos, height) for pos, height in zip(spike_positions_B, spike_heights_B)]
 
-        # Combine spike info for both channels
-        spike_info_text = "\n".join(spike_info_A + spike_info_B)
+        # Combine spike data for both channels with the spike count in the desired format
+        spike_data_text_A = f"Spikes (A) ({spike_count_A}): {spike_data_A}"
+        #spike_data_text_B = f"Spikes (B) ({spike_count_B}): {spike_data_B}"
 
-        # Printing the spike information
-        #print(f"Spikes (A): {spike_count_A} - Positions, Heights, Colors: {spike_info_A}")
-        #print(f"Spikes (B): {spike_count_B} - Positions, Heights, Colors: {spike_info_B}")
+        # Combine spike data text for both channels
+        spike_data_text = f"{spike_data_text_A}"
 
-        # Update the spike count label to include the spike information
+        # Update the spike count label to include the spike data
         spike_count_label.config(
-            text=f"Spikes (A): {spike_count_A}\n{spike_info_text}\nSpikes (B): {spike_count_B}"
+            text=spike_data_text
         )
 
         # Clear and replot the data for both channels
@@ -246,20 +283,12 @@ def update(_, skip=40):
         ax.plot(x_values, latest_A_samples, 'b-', label="Channel A")
         ax.plot(x_values, latest_B_samples, 'g-', label="Channel B")
 
-        # Plot each spike with its correct color for Channel A
+        # Plot colored dots for the highest peak of each spike for Channel A only
         for i, (position, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A)):
-            spike_segment = latest_A_samples[position:position + skip]  # Adjusted for each spike
-            x_segment = x_values[position:position + skip]
-            ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike A {i+1}")
+            peak_position = max_sample_indices_A[i]  # Use the actual peak position from the indices
+            peak_height = height  # Use the maximum height of the spike
+            ax.scatter(peak_position, peak_height, color=color, zorder=5, label=f"Peak A {i+1}")  # Plot a colored dot at the peak
 
-        # Plot each spike with its correct color for Channel B
-        for i, (position, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B)):
-            spike_segment = latest_B_samples[position:position + skip]
-            x_segment = x_values[position:position + skip]
-            ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike B {i+1}")
-
-        #ax.legend()
-        
         canvas.draw_idle()
         
         return line_A, line_B
@@ -277,21 +306,23 @@ def update_plot(skip=40):
         line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
 
     # Count spikes and get their positions, heights, and colors
-    spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A = count_spikes(latest_A_samples[selected_start:selected_end])
-    spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B = count_spikes(latest_B_samples[selected_start:selected_end])
+    spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A, max_sample_indices_A = count_spikes(latest_A_samples)
+    #spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B, max_sample_indices_B = count_spikes(latest_B_samples)
 
     # Format the spike information to display
-    spike_info_A = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
-                    for i, (pos, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A))]
-    spike_info_B = [f"Spike {i+1}: Pos: {pos}, Ht: {height:.2f}, Color: {color}"
-                    for i, (pos, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B))]
+    spike_data_A = [(pos, height) for pos, height in zip(spike_positions_A, spike_heights_A)]
+    #spike_data_B = [(pos, height) for pos, height in zip(spike_positions_B, spike_heights_B)]
 
     # Combine spike info for both channels
-    spike_info_text = "\n".join(spike_info_A + spike_info_B)
+    spike_data_text_A = f"Spikes (A) ({spike_count_A}): {spike_data_A}"
+    #spike_data_text_B = f"Spikes (B) ({spike_count_B}): {spike_data_B}"
 
     # Update the spike count label to include the spike information
+    spike_data_text = f"{spike_data_text_A}"
+
+    # Update the spike count label to include the spike data
     spike_count_label.config(
-        text=f"Spikes (A): {spike_count_A}\n{spike_info_text}\nSpikes (B): {spike_count_B}"
+        text=spike_data_text
     )
 
     # Clear and replot the data for the selected range
@@ -305,15 +336,15 @@ def update_plot(skip=40):
 
     # Plot each spike with its correct color for Channel A
     for i, (position, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A)):
-        spike_segment = latest_A_samples[selected_start + position:selected_start + position + skip]  # Adjusted to the selected range
-        x_segment = x_values[selected_start + position:selected_start + position + skip]
-        ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike A {i+1}")
+        peak_position = max_sample_indices_A[i]  # Use the actual peak position from the indices
+        peak_height = height  # Use the maximum height of the spike
+        ax.scatter(peak_position, peak_height, color=color, zorder=5, label=f"Peak A {i+1}")  # Plot a colored dot at the peak
 
     # Plot each spike with its correct color for Channel B
-    for i, (position, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B)):
-        spike_segment = latest_B_samples[selected_start + position:selected_start + position + skip]
-        x_segment = x_values[selected_start + position:selected_start + position + skip]
-        ax.plot(x_segment, spike_segment, color=color, lw=2, label=f"Spike B {i+1}")
+    #for i, (position, height, color) in enumerate(zip(spike_positions_B, spike_heights_B, spike_colors_B)):
+    #    peak_position = max_sample_indices_B[i]  # Use the actual peak position from the indices
+    #    peak_height = height  # Use the maximum height of the spike
+    #    ax.scatter(peak_position, peak_height, color=color, zorder=5, label=f"Peak B {i+1}")  # Plot a colored dot at the peak
 
     # Draw the updated plot
     canvas.draw_idle()
@@ -429,8 +460,7 @@ def on_closing():
     root.destroy()  # Destroy the window
 
 # GUI Setup
-root = tk.Tk()
-root.title("PCIe Data Server GUI")
+
 
 button_frame = tk.Frame(root)
 button_frame.pack(pady=5)

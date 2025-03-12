@@ -36,7 +36,7 @@ def pcie_init():
 
 def trigger(bar):
     print("Trigger Initial.....")
-    bar.write(DACVALUE_REG, 0x14)
+    bar.write(DACVALUE_REG, 0x64)
     bar.write(TRIGGER_REG, 0x1)
     bar.write(TRIGGER_REG, 0x0)
     #bar.write(TRIGGER_REG, 0x1)
