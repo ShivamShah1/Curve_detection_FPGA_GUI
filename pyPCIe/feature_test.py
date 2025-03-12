@@ -479,7 +479,6 @@ tk.Button(button_frame, text="Stop", command=stop_server).grid(row=0, column=2, 
 range_frame = tk.Frame(root)
 range_frame.pack(pady=5)
 
-# X-axis controls on the same line (X Start, X End, X Shift, Left, Right buttons)
 tk.Label(range_frame, text="X Start:").grid(row=0, column=0)
 start_sample_entry = tk.Entry(range_frame, width=10)
 start_sample_entry.grid(row=0, column=1)
@@ -488,30 +487,17 @@ tk.Label(range_frame, text="X End:").grid(row=0, column=2)
 end_sample_entry = tk.Entry(range_frame, width=10)
 end_sample_entry.grid(row=0, column=3)
 
-tk.Label(range_frame, text="X Shift:").grid(row=0, column=4)
-shift_amount_entry = tk.Entry(range_frame, width=10)
-shift_amount_entry.grid(row=0, column=5)
-shift_amount_entry.insert(0, "100")
+# Y-axis Range Inputs
+range_frame_y = tk.Frame(root)
+range_frame_y.pack(pady=5)
 
-tk.Button(range_frame, text="Left", command=lambda: shift_x_range("left")).grid(row=0, column=6)
-tk.Button(range_frame, text="Right", command=lambda: shift_x_range("right")).grid(row=0, column=7)
+tk.Label(range_frame_y, text="Y Start:").grid(row=0, column=0)
+start_y_entry = tk.Entry(range_frame_y, width=10)
+start_y_entry.grid(row=0, column=1)
 
-# Y-axis controls on the same line (Y Start, Y End, Y Shift, Up, Down buttons)
-tk.Label(range_frame, text="Y Start:").grid(row=1, column=0)
-start_y_entry = tk.Entry(range_frame, width=10)
-start_y_entry.grid(row=1, column=1)
-
-tk.Label(range_frame, text="Y End:").grid(row=1, column=2)
-end_y_entry = tk.Entry(range_frame, width=10)
-end_y_entry.grid(row=1, column=3)
-
-tk.Label(range_frame, text="Y Shift:").grid(row=1, column=4)
-shift_y_amount_entry = tk.Entry(range_frame, width=10)
-shift_y_amount_entry.grid(row=1, column=5)
-shift_y_amount_entry.insert(0, "100")
-
-tk.Button(range_frame, text="Up", command=lambda: shift_y_range("up")).grid(row=1, column=6)
-tk.Button(range_frame, text="Down", command=lambda: shift_y_range("down")).grid(row=1, column=7)
+tk.Label(range_frame_y, text="Y End:").grid(row=0, column=2)
+end_y_entry = tk.Entry(range_frame_y, width=10)
+end_y_entry.grid(row=0, column=3)
 
 # Frame for Range Adjustment
 range_button_frame = tk.Frame(root)
@@ -520,6 +506,29 @@ range_button_frame.pack(pady=5)
 tk.Button(range_button_frame, text="Set X Range", command=set_x_range).grid(row=0, column=0, padx=5, pady=5)
 tk.Button(range_button_frame, text="Original Size", command=reset_zoom).grid(row=0, column=1, padx=5, pady=5)
 tk.Button(range_button_frame, text="Set Y Range", command=set_y_range).grid(row=0, column=2, padx=5, pady=5)
+
+shift_frame = tk.Frame(root)
+shift_frame.pack(pady=5)
+
+tk.Label(shift_frame, text="Shift by:").grid(row=0, column=0)
+shift_amount_entry = tk.Entry(shift_frame, width=10)
+shift_amount_entry.grid(row=0, column=1)
+shift_amount_entry.insert(0, "100")
+
+tk.Button(shift_frame, text="Left", command=lambda: shift_x_range("left")).grid(row=0, column=2)
+tk.Button(shift_frame, text="Right", command=lambda: shift_x_range("right")).grid(row=0, column=3)
+
+# Y-axis shift controls
+shift_y_frame = tk.Frame(root)
+shift_y_frame.pack(pady=5)
+
+tk.Label(shift_y_frame, text="Shift Y by:").grid(row=0, column=0)
+shift_y_amount_entry = tk.Entry(shift_y_frame, width=10)
+shift_y_amount_entry.grid(row=0, column=1)
+shift_y_amount_entry.insert(0, "100")
+
+tk.Button(shift_y_frame, text="Up", command=lambda: shift_y_range("up")).grid(row=0, column=2)
+tk.Button(shift_y_frame, text="Down", command=lambda: shift_y_range("down")).grid(row=0, column=3)
 
 # Spike Count Display
 spike_count_label = tk.Label(root, text="Spikes (A): 0   Spikes (B): 0", font=("Helvetica", 12))
