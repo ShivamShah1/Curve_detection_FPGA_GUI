@@ -253,14 +253,14 @@ def update(_, skip=40):
             line_A.set_data(x_values, latest_A_samples)
             line_B.set_data(x_values, latest_B_samples)
         canvas.draw_idle()
-        
+
         # Count spikes and get their positions, heights, colors, and max sample indices for continuous data
         spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A, max_sample_indices_A = count_spikes(latest_A_samples)
         #spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B, max_sample_indices_B = count_spikes(latest_B_samples)
 
-        # Format the spike data as a list of tuples (position, height) for both channels
-        spike_data_A = [(pos, height) for pos, height in zip(spike_positions_A, spike_heights_A)]
-        #spike_data_B = [(pos, height) for pos, height in zip(spike_positions_B, spike_heights_B)]
+        # Format the spike data as a list of tuples (position, height) for Channel A only
+        spike_data_A = [(max_sample_indices_A[i], spike_heights_A[i]) for i in range(spike_count_A)]
+        #spike_data_B = [(max_sample_indices_B[i], spike_heights_B[i]) for i in range(spike_count_B)]
 
         # Combine spike data for both channels with the spike count in the desired format
         spike_data_text_A = f"Spikes (A) ({spike_count_A}): {spike_data_A}"
@@ -284,13 +284,11 @@ def update(_, skip=40):
         ax.plot(x_values, latest_B_samples, 'g-', label="Channel B")
 
         # Plot colored dots for the highest peak of each spike for Channel A only
-        for i, (position, height, color) in enumerate(zip(spike_positions_A, spike_heights_A, spike_colors_A)):
-            peak_position = max_sample_indices_A[i]  # Use the actual peak position from the indices
-            peak_height = height  # Use the maximum height of the spike
+        for i, (peak_position, peak_height, color) in enumerate(zip(max_sample_indices_A, spike_heights_A, spike_colors_A)):
             ax.scatter(peak_position, peak_height, color=color, zorder=5, label=f"Peak A {i+1}")  # Plot a colored dot at the peak
 
         canvas.draw_idle()
-        
+
         return line_A, line_B
 
 # Function to Update Plot
@@ -309,15 +307,15 @@ def update_plot(skip=40):
     spike_count_A, spike_positions_A, spike_heights_A, spike_colors_A, max_sample_indices_A = count_spikes(latest_A_samples)
     #spike_count_B, spike_positions_B, spike_heights_B, spike_colors_B, max_sample_indices_B = count_spikes(latest_B_samples)
 
-    # Format the spike information to display
-    spike_data_A = [(pos, height) for pos, height in zip(spike_positions_A, spike_heights_A)]
-    #spike_data_B = [(pos, height) for pos, height in zip(spike_positions_B, spike_heights_B)]
+    # Format the spike data as a list of tuples (position, height) for Channel A only
+    spike_data_A = [(max_sample_indices_A[i], spike_heights_A[i]) for i in range(spike_count_A)]
+    #spike_data_B = [(max_sample_indices_B[i], spike_heights_B[i]) for i in range(spike_count_B)]
 
-    # Combine spike info for both channels
+    # Combine spike data for both channels with the spike count in the desired format
     spike_data_text_A = f"Spikes (A) ({spike_count_A}): {spike_data_A}"
     #spike_data_text_B = f"Spikes (B) ({spike_count_B}): {spike_data_B}"
 
-    # Update the spike count label to include the spike information
+    # Combine spike data text for both channels
     spike_data_text = f"{spike_data_text_A}"
 
     # Update the spike count label to include the spike data
