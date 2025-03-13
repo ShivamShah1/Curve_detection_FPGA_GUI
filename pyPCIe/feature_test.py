@@ -242,7 +242,7 @@ def count_spikes(samples, threshold=2250, end_threshold=2065):
     return spike_count, spike_positions, spike_heights, spike_colors, max_sample_indices
 
 # Matplotlib Plot Setup
-fig, ax = plt.subplots(figsize=(6, 4))
+fig, ax = plt.subplots(figsize=(11, 11))
 ax.set_xlim(0, CHANNEL_SAMPLES)
 ax.set_ylim(1800, 5000)
 line_A, = ax.plot([], [], 'b-', label="Channel A")
@@ -258,11 +258,15 @@ original_ylim = ax.get_ylim()
 
 # Fix: Proper Continuous Update for FuncAnimation
 def update(_, skip=40):
+    global selected_start, selected_end, selected_ylim
+    
+    # Ensure range values are integers
+    selected_start, selected_end = int(selected_start), int(selected_end)
     if continuous_mode:
         with data_lock:
-            x_values = np.arange(CHANNEL_SAMPLES)
-            line_A.set_data(x_values, latest_A_samples)
-            line_B.set_data(x_values, latest_B_samples)
+            x_values = np.arange(selected_start, selected_end)
+            line_A.set_data(x_values, latest_A_samples[selected_start:selected_end])
+            line_B.set_data(x_values, latest_B_samples[selected_start:selected_end])
         canvas.draw_idle()
 
         # Count spikes and get their positions, heights, colors, and max sample indices for continuous data
@@ -287,12 +291,12 @@ def update(_, skip=40):
 
         # Clear and replot the data for both channels
         ax.cla()  # Clear the axis
-        ax.set_xlim(0, CHANNEL_SAMPLES)
-        ax.set_ylim(1800, 5000)
+        ax.set_xlim(selected_start, selected_end)
+        ax.set_ylim(selected_ylim)
 
         # Plot the main signal lines for both channels
-        ax.plot(x_values, latest_A_samples, 'b-', label="Channel A")
-        ax.plot(x_values, latest_B_samples, 'g-', label="Channel B")
+        ax.plot(x_values, latest_A_samples[selected_start:selected_end], 'b-', label="Channel A")
+        ax.plot(x_values, latest_B_samples[selected_start:selected_end], 'g-', label="Channel B")
 
         # Plot colored dots for the highest peak of each spike for Channel A only
         for i, (peak_position, peak_height, color) in enumerate(zip(max_sample_indices_A, spike_heights_A, spike_colors_A)):
@@ -468,16 +472,13 @@ def on_closing():
     root.quit()  # Exit main loop
     root.destroy()  # Destroy the window
 
-# GUI Setup
-button_frame = tk.Frame(root)
-button_frame.pack(pady=5)
-
-tk.Button(button_frame, text="Continuous", command=start_server).grid(row=0, column=0, padx=5, pady=5)
-tk.Button(button_frame, text="Trigger Once", command=trigger_once).grid(row=0, column=1, padx=5, pady=5)
-tk.Button(button_frame, text="Stop", command=stop_server).grid(row=0, column=2, padx=5, pady=5)
+tk.Button(dac_frame, text="Continuous", command=start_server).grid(row=0, column=2, padx=5, pady=0)
+tk.Button(dac_frame, text="Trigger Once", command=trigger_once).grid(row=0, column=3, padx=5, pady=0)
+tk.Button(dac_frame, text="Stop", command=stop_server).grid(row=0, column=4, padx=5, pady=0)
+tk.Button(dac_frame, text="Original Size", command=reset_zoom).grid(row=0, column=5, padx=5, pady=0)
 
 range_frame = tk.Frame(root)
-range_frame.pack(pady=5)
+range_frame.pack(pady=0)
 
 tk.Label(range_frame, text="X Start:").grid(row=0, column=0)
 start_sample_entry = tk.Entry(range_frame, width=10)
@@ -487,9 +488,18 @@ tk.Label(range_frame, text="X End:").grid(row=0, column=2)
 end_sample_entry = tk.Entry(range_frame, width=10)
 end_sample_entry.grid(row=0, column=3)
 
+tk.Label(range_frame, text="Shift X by:").grid(row=0, column=4)
+shift_amount_entry = tk.Entry(range_frame, width=10)
+shift_amount_entry.grid(row=0, column=5)
+shift_amount_entry.insert(0, "100")
+
+tk.Button(range_frame, text="Left", command=lambda: shift_x_range("left")).grid(row=0, column=6)
+tk.Button(range_frame, text="Right", command=lambda: shift_x_range("right")).grid(row=0, column=7)
+tk.Button(range_frame, text="Set X Range", command=set_x_range).grid(row=0, column=8, padx=5, pady=0)
+
 # Y-axis Range Inputs
 range_frame_y = tk.Frame(root)
-range_frame_y.pack(pady=5)
+range_frame_y.pack(pady=0)
 
 tk.Label(range_frame_y, text="Y Start:").grid(row=0, column=0)
 start_y_entry = tk.Entry(range_frame_y, width=10)
@@ -499,44 +509,22 @@ tk.Label(range_frame_y, text="Y End:").grid(row=0, column=2)
 end_y_entry = tk.Entry(range_frame_y, width=10)
 end_y_entry.grid(row=0, column=3)
 
-# Frame for Range Adjustment
-range_button_frame = tk.Frame(root)
-range_button_frame.pack(pady=5)
-
-tk.Button(range_button_frame, text="Set X Range", command=set_x_range).grid(row=0, column=0, padx=5, pady=5)
-tk.Button(range_button_frame, text="Original Size", command=reset_zoom).grid(row=0, column=1, padx=5, pady=5)
-tk.Button(range_button_frame, text="Set Y Range", command=set_y_range).grid(row=0, column=2, padx=5, pady=5)
-
-shift_frame = tk.Frame(root)
-shift_frame.pack(pady=5)
-
-tk.Label(shift_frame, text="Shift by:").grid(row=0, column=0)
-shift_amount_entry = tk.Entry(shift_frame, width=10)
-shift_amount_entry.grid(row=0, column=1)
-shift_amount_entry.insert(0, "100")
-
-tk.Button(shift_frame, text="Left", command=lambda: shift_x_range("left")).grid(row=0, column=2)
-tk.Button(shift_frame, text="Right", command=lambda: shift_x_range("right")).grid(row=0, column=3)
-
-# Y-axis shift controls
-shift_y_frame = tk.Frame(root)
-shift_y_frame.pack(pady=5)
-
-tk.Label(shift_y_frame, text="Shift Y by:").grid(row=0, column=0)
-shift_y_amount_entry = tk.Entry(shift_y_frame, width=10)
-shift_y_amount_entry.grid(row=0, column=1)
+tk.Label(range_frame_y, text="Shift Y by:").grid(row=0, column=4)
+shift_y_amount_entry = tk.Entry(range_frame_y, width=10)
+shift_y_amount_entry.grid(row=0, column=5)
 shift_y_amount_entry.insert(0, "100")
 
-tk.Button(shift_y_frame, text="Up", command=lambda: shift_y_range("up")).grid(row=0, column=2)
-tk.Button(shift_y_frame, text="Down", command=lambda: shift_y_range("down")).grid(row=0, column=3)
+tk.Button(range_frame_y, text="Up", command=lambda: shift_y_range("up")).grid(row=0, column=6)
+tk.Button(range_frame_y, text="Down", command=lambda: shift_y_range("down")).grid(row=0, column=7)
+tk.Button(range_frame_y, text="Set Y Range", command=set_y_range).grid(row=0, column=8, padx=5, pady=0)
 
 # Spike Count Display
-spike_count_label = tk.Label(root, text="Spikes (A): 0   Spikes (B): 0", font=("Helvetica", 12))
-spike_count_label.pack(pady=10)
+spike_count_label = tk.Label(root, text="Spikes (A): 0", font=("Helvetica", 12))
+spike_count_label.pack(pady=5)
 
 # Matplotlib Canvas
 canvas = FigureCanvasTkAgg(fig, master=root)
-canvas.get_tk_widget().pack(padx=5, pady=5)
+canvas.get_tk_widget().pack(padx=30, pady=5)
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
